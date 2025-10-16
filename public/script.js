@@ -1,5 +1,7 @@
-const backendUrl = "http://localhost:5000";
+// ================= API CONFIG =================
+const API_URL = "https://cricket-backend.onrender.com";
 
+// ================= SESSION HANDLING =================
 function saveUserSession(name, pincode) {
   localStorage.setItem("cricketUser", JSON.stringify({ name, pincode }));
 }
@@ -8,14 +10,14 @@ function getUserSession() {
   return JSON.parse(localStorage.getItem("cricketUser"));
 }
 
-// LOGIN / SIGNUP
+// ================= LOGIN / SIGNUP =================
 async function login() {
   const name = document.getElementById("name").value.trim();
   const pincode = document.getElementById("pincode").value.trim();
   if (!name || !pincode) return alert("Enter both name and pincode");
 
   try {
-    const res = await fetch(`${backendUrl}/login`, {
+    const res = await fetch(`${API_URL}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, pincode }),
@@ -42,7 +44,7 @@ function showLoginError(message) {
   if (errorBox) errorBox.textContent = message;
 }
 
-// ADD MATCH
+// ================= ADD MATCH =================
 async function addMatch() {
   const user = getUserSession();
   if (!user) return (window.location.href = "index.html");
@@ -57,76 +59,84 @@ async function addMatch() {
   if (!runs || !balls) return alert("Runs and Balls are required!");
 
   const strikeRate = ((runs / balls) * 100).toFixed(2);
-  const match = { runs, balls, fours, sixes, opponent, notes, strikeRate };
+  const match = { runs, balls, fours, sixes, opponent, notes, strikeRate, date: new Date().toISOString() };
 
-  await fetch(`${backendUrl}/addMatch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: user.name, pincode: user.pincode, match }),
-  });
+  try {
+    const res = await fetch(`${API_URL}/addMatch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: user.name, pincode: user.pincode, match }),
+    });
 
-  document.getElementById("runs").value = "";
-  document.getElementById("balls").value = "";
-  document.getElementById("fours").value = "";
-  document.getElementById("sixes").value = "";
-  document.getElementById("opponent").value = "";
-  document.getElementById("notes").value = "";
+    const data = await res.json();
+    if (!res.ok) return alert(data.message || "Error adding match");
 
-  loadMatches();
+    // Clear input fields
+    ["runs","balls","fours","sixes","opponent","notes"].forEach(id => document.getElementById(id).value = "");
+
+    loadRecentMatches();
+  } catch (err) {
+    console.error(err);
+    alert("Network error. Try again.");
+  }
 }
 
-// LOAD MATCHES
-// Load recent matches (last 6 matches)
-function loadRecentMatches() {
+// ================= LOAD MATCHES =================
+async function loadRecentMatches() {
   const user = getUserSession();
   if (!user) return (window.location.href = "index.html");
 
-  fetch(`${backendUrl}/getMatches`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(user)
-  })
-    .then(res => res.json())
-    .then(matches => {
-      const box = document.getElementById("recentMatches");
-      if (!box) return;
-
-      // Sort matches descending (newest first)
-      matches = matches.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
-
-      // Take last 6 matches
-      const recent = matches.slice(0, 6);
-
-      // Render cards
-      box.innerHTML = recent.map(m => `
-        <div class="bg-white rounded-xl shadow p-4">
-          <div class="flex justify-between items-start">
-            <div>
-              <h3 class="text-lg font-semibold">${m.runs} runs <span class="text-sm text-gray-500">(${m.balls} balls)</span></h3>
-              <p class="text-sm text-gray-600">SR: ${m.strikeRate}</p>
-              <p class="text-sm text-gray-600">vs ${m.opponent || "Unknown"}</p>
-            </div>
-            <div class="text-xs text-gray-400">${new Date(m.date).toLocaleDateString()} • ${new Date(m.date).toLocaleTimeString()}</div>
-          </div>
-          <p class="mt-2 text-gray-700">${m.notes || ""}</p>
-        </div>
-      `).join('');
-
-      // Update chart using all matches if needed
-      drawRunsChart(matches);
+  try {
+    const res = await fetch(`${API_URL}/getMatches`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(user)
     });
+
+    if (!res.ok) throw new Error("Error fetching matches");
+
+    let matches = await res.json();
+
+    const box = document.getElementById("recentMatches");
+    if (!box) return;
+
+    // Sort descending
+    matches = matches.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    const recent = matches.slice(0, 6);
+
+    box.innerHTML = recent.map(m => `
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="text-lg font-semibold">${m.runs} runs <span class="text-sm text-gray-500">(${m.balls} balls)</span></h3>
+            <p class="text-sm text-gray-600">SR: ${m.strikeRate}</p>
+            <p class="text-sm text-gray-600">vs ${m.opponent || "Unknown"}</p>
+          </div>
+          <div class="text-xs text-gray-400">${new Date(m.date).toLocaleDateString()} • ${new Date(m.date).toLocaleTimeString()}</div>
+        </div>
+        <p class="mt-2 text-gray-700">${m.notes || ""}</p>
+      </div>
+    `).join('');
+
+    drawRunsChart(matches);
+
+  } catch (err) {
+    console.error(err);
+    alert("Failed to load matches");
+  }
 }
 
-// Go to full matches page
+// ================= VIEW ALL MATCHES =================
 function viewAllMatches() {
-  window.location.href = "allMatches.html"; // create this page to display all matches
+  window.location.href = "allMatches.html";
 }
 
+// ================= CHART =================
 function drawRunsChart(matches) {
   const canvas = document.getElementById('runsChart');
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
-  // Sort matches by date ascending
   matches.sort((a, b) => new Date(a.date) - new Date(b.date));
 
   const labels = matches.map(m => new Date(m.date).toLocaleDateString());
@@ -191,14 +201,14 @@ function drawRunsChart(matches) {
   });
 }
 
-// LOGOUT
+// ================= LOGOUT =================
 function logout() {
   localStorage.removeItem("cricketUser");
   window.location.href = "index.html";
 }
 
-// Replace previous window.onload for home page
+// ================= ON LOAD =================
 window.onload = () => {
   if (document.getElementById("recentMatches")) loadRecentMatches();
-  if (document.getElementById("statsBox")) loadStats();
+  if (document.getElementById("statsBox")) loadStats(); // define loadStats() separately if needed
 };
