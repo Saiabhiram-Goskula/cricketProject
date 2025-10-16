@@ -5,11 +5,10 @@ const path = require("path");
 
 const app = express();
 app.use(express.json());
-app.use(cors());
-app.use(express.static("public")); // serve frontend files
+app.use(cors({ origin: 'https://cricketproject.vercel.app', credentials: true }));
 
-// Connect MongoDB (you’ll put your MongoDB URI here)
-mongoose.connect("mongodb://127.0.0.1:27017/cricket_tracker", {
+// MongoDB connection
+mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
@@ -19,39 +18,30 @@ mongoose.connect("mongodb://127.0.0.1:27017/cricket_tracker", {
 // Import User model
 const User = require("./models/User");
 
-
+// LOGIN / SIGNUP
 app.post("/login", async (req, res) => {
   const { name, pincode } = req.body;
-
-  // Check if a user with the same name already exists
   const existingUser = await User.findOne({ name });
   if (existingUser) {
-    // If the existing user has same pincode → login
-    if (existingUser.pincode === pincode) {
-      return res.json(existingUser);
-    }
-    // Name exists but pincode is different → reject
-    return res.status(400).json({ message: "User name already exists. Try a different name or use correct pincode." });
+    if (existingUser.pincode === pincode) return res.json(existingUser);
+    return res.status(400).json({ message: "User name already exists. Try a different name or correct pincode." });
   }
-
-  // Create new user
   const newUser = new User({ name, pincode, matches: [] });
   await newUser.save();
   res.json(newUser);
 });
 
-// 👉 ADD MATCH
+// ADD MATCH
 app.post("/addMatch", async (req, res) => {
   const { name, pincode, match } = req.body;
   const user = await User.findOne({ name, pincode });
   if (!user) return res.status(404).json({ message: "User not found" });
-
   user.matches.push(match);
   await user.save();
   res.json({ message: "Match added", user });
 });
 
-// 👉 GET MATCHES
+// GET MATCHES
 app.post("/getMatches", async (req, res) => {
   const { name, pincode } = req.body;
   const user = await User.findOne({ name, pincode });
@@ -59,7 +49,7 @@ app.post("/getMatches", async (req, res) => {
   res.json(user.matches);
 });
 
-// 👉 GET STATS
+// GET STATS
 app.post("/getStats", async (req, res) => {
   const { name, pincode } = req.body;
   const user = await User.findOne({ name, pincode });
@@ -76,16 +66,12 @@ app.post("/getStats", async (req, res) => {
   const average = (totalRuns / matches.length).toFixed(2);
   const strikeRate = ((totalRuns / totalBalls) * 100).toFixed(2);
 
-  res.json({
-    totalMatches: matches.length,
-    totalRuns,
-    totalBalls,
-    totalFours,
-    totalSixes,
-    highestScore,
-    average,
-    strikeRate,
-  });
+  res.json({ totalMatches: matches.length, totalRuns, totalBalls, totalFours, totalSixes, highestScore, average, strikeRate });
 });
 
-app.listen(5000, () => console.log("🚀 Server running on port 5000"));
+// Export app for serverless / Render
+module.exports = app;
+
+// Listen on dynamic port
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
