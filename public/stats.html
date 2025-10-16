@@ -1,0 +1,126 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Stats - Cricket Tracker</title>
+ <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6">
+    <h2 class="text-2xl font-bold mb-4 text-center">Career Statistics</h2>
+    <div id="statsBox" class="space-y-2 text-gray-700 text-lg"></div>
+
+    <div class="flex justify-between mt-6">
+      <a href="home.html" class="text-blue-600 hover:underline">← Back to Home</a>
+      <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">Logout</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html> -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Stats - Cricket Tracker</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+
+  <!-- Top bar with Logout -->
+  <div class="flex justify-between items-center max-w-4xl mx-auto mb-6">
+    <h1 class="text-2xl font-bold">Career Statistics</h1>
+    <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">Logout</button>
+  </div>
+
+  <div class="max-w-4xl mx-auto space-y-6">
+
+    <!-- Stats Cards Grid -->
+    <div id="statsBox" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <!-- Cards will be injected here via JS -->
+    </div>
+
+    <!-- Career Chart -->
+    <h2 class="text-xl font-bold mb-4">Runs, Fours & Sixes Trend</h2>
+    <div class="bg-white rounded-xl shadow p-4">
+      <canvas id="runsChart" style="height: 300px; width: 100%;"></canvas>
+    </div>
+
+        
+    <!-- Back to Home Button -->
+    <div class="mt-6">
+      <a href="home.html" class="block p-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 text-center">
+        ← Back to Home
+      </a>
+    </div>
+
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    // Enhance loadStats() to inject stylized cards
+    async function loadStats() {
+      const user = getUserSession();
+      if (!user) return (window.location.href = "index.html");
+
+      try {
+        const res = await fetch(`${backendUrl}/getStats`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(user)
+        });
+        const stats = await res.json();
+
+        const box = document.getElementById("statsBox");
+        if (!box) return;
+
+        if (stats.message) {
+          box.innerHTML = `<p class="text-center text-gray-500">${stats.message}</p>`;
+          return;
+        }
+
+        // Map each stat to a colored card
+        const cards = [
+          { title: "Total Matches", value: stats.totalMatches, color: "bg-green-500" },
+          { title: "Total Runs", value: stats.totalRuns, color: "bg-yellow-500" },
+          { title: "Average", value: stats.average, color: "bg-purple-500" },
+          { title: "Strike Rate", value: stats.strikeRate, color: "bg-blue-500" },
+          { title: "Fours", value: stats.totalFours, color: "bg-indigo-500" },
+          { title: "Sixes", value: stats.totalSixes, color: "bg-pink-500" },
+          { title: "Highest Score", value: stats.highestScore, color: "bg-red-500" }
+        ];
+
+        box.innerHTML = cards.map(c => `
+          <div class="rounded-xl shadow-lg p-6 text-white ${c.color} hover:scale-105 transform transition">
+            <h3 class="text-lg font-semibold">${c.title}</h3>
+            <p class="text-2xl font-bold mt-2">${c.value}</p>
+          </div>
+        `).join("");
+
+      } catch (err) {
+        console.error("Error loading stats:", err);
+      }
+    }
+
+    // Auto load
+    window.onload = () => {
+      if (document.getElementById("statsBox")) loadStats();
+      if (document.getElementById("runsChart")) {
+        // Load chart using fetchMatches() or reuse previous function
+        fetch(`${backendUrl}/getMatches`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(getUserSession())
+        })
+        .then(res => res.json())
+        .then(drawRunsChart);
+      }
+    };
+  </script>
+</body>
+</html>

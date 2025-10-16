@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Matches - Cricket Tracker</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+
+  <!-- Top bar -->
+  <div class="flex justify-between items-center max-w-4xl mx-auto mb-6">
+    <h1 class="text-2xl font-bold">All Matches</h1>
+    <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600">Logout</button>
+  </div>
+
+  <div class="max-w-4xl mx-auto space-y-6">
+
+      <!-- Matches List -->
+      <h2 class="text-xl font-bold mt-6 mb-4">All Matches (Newest → Oldest)</h2>
+      <div id="matchList" class="space-y-4"></div>
+      
+      <!-- Chart -->
+      <h2 class="text-xl font-bold mb-4">Runs, Fours & Sixes Trend</h2>
+      <div class="bg-white rounded-xl shadow p-4">
+        <canvas id="runsChart" style="height: 300px; width: 100%;"></canvas>
+      </div>
+
+    <!-- Back to Home -->
+    <div class="mt-6 text-center">
+      <a href="home.html" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">← Back to Home</a>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    function loadAllMatches() {
+      const user = getUserSession();
+      if (!user) return window.location.href = "index.html";
+
+      fetch(`${backendUrl}/getMatches`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(user)
+      })
+      .then(res => res.json())
+      .then(matches => {
+        // Sort newest to oldest
+        matches.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+        // Display matches
+        const box = document.getElementById("matchList");
+        if (!box) return;
+
+        box.innerHTML = matches.map(m => `
+          <div class="bg-white rounded-xl shadow p-4">
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="text-lg font-semibold">${m.runs} runs <span class="text-sm text-gray-500">(${m.balls} balls)</span></h3>
+                <p class="text-sm text-gray-600">SR: ${m.strikeRate}</p>
+                <p class="text-sm text-gray-600">vs ${m.opponent || "Unknown"}</p>
+              </div>
+              <div class="text-xs text-gray-400">${new Date(m.date).toLocaleDateString()} • ${new Date(m.date).toLocaleTimeString()}</div>
+            </div>
+            <p class="mt-2 text-gray-700">${m.notes || ""}</p>
+          </div>
+        `).join('');
+
+        // Draw chart
+        drawRunsChart(matches);
+      });
+    }
+
+    function drawRunsChart(matches) {
+      const canvas = document.getElementById('runsChart');
+      const ctx = canvas.getContext('2d');
+
+      // Sort by date ascending for chart
+      matches.sort((a,b) => new Date(a.date) - new Date(b.date));
+
+      const labels = matches.map(m => new Date(m.date).toLocaleDateString());
+      const runsData = matches.map(m => m.runs);
+      const foursData = matches.map(m => m.fours || 0);
+      const sixesData = matches.map(m => m.sixes || 0);
+
+      if (window.runsChartInstance) window.runsChartInstance.destroy();
+
+      window.runsChartInstance = new Chart(ctx, {
+        data: {
+          labels,
+          datasets: [
+            { type: 'line', label: 'Runs', data: runsData, borderColor: 'rgb(34,197,94)', backgroundColor: 'rgba(34,197,94,0.2)', fill:true, tension:0.3, pointRadius:4 },
+            { type: 'bar', label: 'Fours', data: foursData, backgroundColor:'rgba(59,130,246,0.7)' },
+            { type: 'bar', label: 'Sixes', data: sixesData, backgroundColor:'rgba(251,191,36,0.7)' }
+          ]
+        },
+        options: {
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins: { legend:{ display:true, position:'top' }, tooltip:{ mode:'index', intersect:false } },
+          scales: { x:{ title:{ display:true, text:'Match Date' }, stacked:false }, y:{ title:{ display:true, text:'Count / Runs' }, beginAtZero:true, stacked:false } }
+        }
+      });
+    }
+
+    window.onload = () => {
+      loadAllMatches();
+    };
+  </script>
+</body>
+</html>
